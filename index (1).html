@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rocket Path — Solar System Simulation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        oklch(0.18 0.02 270);
+      --bg-deep:   oklch(0.13 0.02 270);
+      --panel:     oklch(0.22 0.02 270);
+      --panel-2:   oklch(0.26 0.02 270);
+      --line:      oklch(0.32 0.02 270);
+      --line-soft: oklch(0.28 0.02 270 / 0.6);
+      --text:      oklch(0.96 0.01 270);
+      --text-dim:  oklch(0.72 0.015 270);
+      --text-mute: oklch(0.55 0.015 270);
+      --accent:    oklch(0.78 0.14 235);   /* sky blue */
+      --go:        oklch(0.78 0.14 145);   /* mint green */
+      --stop:      oklch(0.72 0.16 25);    /* coral */
+      --warn:      oklch(0.82 0.14 85);    /* amber */
+      --shadow-card: 0 1px 0 oklch(1 0 0 / 0.04) inset, 0 8px 24px oklch(0 0 0 / 0.35);
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    body {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: 0.005em;
+    }
+
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+    /* ── Panel ── */
+    #panel {
+      width: 308px;
+      min-width: 308px;
+      background: linear-gradient(180deg, var(--panel) 0%, var(--bg-deep) 100%);
+      border-right: 1px solid var(--line);
+      height: 100vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 18px 18px 16px;
+      gap: 6px;
+    }
+
+    #panel::-webkit-scrollbar { width: 6px; }
+    #panel::-webkit-scrollbar-track { background: transparent; }
+    #panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+    #panel::-webkit-scrollbar-thumb:hover { background: var(--text-mute); }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .brand-mark {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background:
+        radial-gradient(circle at 30% 30%, var(--accent) 0%, transparent 60%),
+        radial-gradient(circle at 70% 70%, var(--go) 0%, transparent 70%),
+        var(--panel-2);
+      box-shadow: 0 0 0 1px var(--line), 0 4px 12px oklch(0 0 0 / 0.4);
+      position: relative;
+    }
+    .brand-mark::after {
+      content: '';
+      position: absolute; inset: 6px;
+      border-radius: 50%;
+      background: var(--text);
+      opacity: 0.95;
+      width: 4px; height: 4px;
+      top: 6px; left: 6px;
+    }
+    .brand-name {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .brand-tag {
+      font-size: 10px;
+      color: var(--text-mute);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: -2px;
+    }
+
+    .sec-header {
+      color: var(--text-mute);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin: 12px 0 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sec-header::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--line-soft);
+    }
+
+    /* Planet toggle rows */
+    #planets-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .planet-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      padding: 7px 8px;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .planet-row:hover { background: oklch(1 0 0 / 0.03); }
+
+    .planet-row input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 5px;
+      border: 1.5px solid var(--line);
+      background: var(--bg-deep);
+      cursor: pointer;
+      flex-shrink: 0;
+      display: grid;
+      place-content: center;
+      transition: all 0.15s;
+    }
+    .planet-row input[type="checkbox"]:checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .planet-row input[type="checkbox"]:checked::after {
+      content: '';
+      width: 8px; height: 5px;
+      border-left: 2px solid var(--bg-deep);
+      border-bottom: 2px solid var(--bg-deep);
+      transform: rotate(-45deg) translate(1px, -1px);
+    }
+
+    .planet-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 0 12px currentColor, inset -3px -3px 6px oklch(0 0 0 / 0.4);
+    }
+
+    .planet-name {
+      cursor: pointer;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      flex: 1;
+    }
+
+    .planet-row.disabled .planet-name { color: var(--text-mute); }
+    .planet-row.disabled .planet-dot { opacity: 0.35; box-shadow: none; }
+
+    /* Mass slider */
+    .mass-row {
+      margin: 2px 0 8px 34px;
+      padding-right: 4px;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+    .slider-label > span:last-child {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      font-size: 12px;
+      letter-spacing: 0;
+      text-transform: none;
+      font-weight: 500;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--line);
+      border-radius: 99px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--text);
+      cursor: pointer;
+      box-shadow: 0 0 0 4px oklch(1 0 0 / 0.06), 0 2px 6px oklch(0 0 0 / 0.4);
+      transition: box-shadow 0.15s, transform 0.15s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      box-shadow: 0 0 0 6px oklch(1 0 0 / 0.1), 0 2px 6px oklch(0 0 0 / 0.4);
+      transform: scale(1.05);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--text);
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 0 4px oklch(1 0 0 / 0.06), 0 2px 6px oklch(0 0 0 / 0.4);
+    }
+
+    /* Rocket sliders */
+    .slider-group { margin-bottom: 14px; }
+
+    .extras {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 6px 0 4px;
+    }
+    .extra-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .extra-row:hover { background: oklch(1 0 0 / 0.03); }
+    .extra-row input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 5px;
+      border: 1.5px solid var(--line);
+      background: var(--bg-deep);
+      cursor: pointer;
+      flex-shrink: 0;
+      display: grid;
+      place-content: center;
+      transition: all 0.15s;
+    }
+    .extra-row input[type="checkbox"]:checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .extra-row input[type="checkbox"]:checked::after {
+      content: '';
+      width: 8px; height: 5px;
+      border-left: 2px solid var(--bg-deep);
+      border-bottom: 2px solid var(--bg-deep);
+      transform: rotate(-45deg) translate(1px, -1px);
+    }
+    .extra-icon {
+      width: 14px; height: 14px;
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+    }
+    .extra-icon[data-icon="moon"]::before {
+      content: '';
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: oklch(0.85 0.01 270);
+      box-shadow: inset -3px -2px 0 oklch(0.5 0.01 270);
+    }
+    .extra-icon[data-icon="belt"] {
+      background: radial-gradient(circle, transparent 38%, oklch(0.65 0.06 70) 40%, oklch(0.65 0.06 70) 50%, transparent 52%);
+      border-radius: 50%;
+    }
+    .extra-label {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .extra-count {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: var(--text-mute);
+      font-size: 11px;
+      margin-left: 4px;
+    }
+
+    /* Launch-from */
+    #launch-from {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      cursor: default;
+    }
+    #launch-from .lf-label {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      font-weight: 600;
+    }
+    #launch-from .lf-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .lf-btn {
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--text-dim);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      line-height: 1;
+      transition: all 0.15s;
+    }
+    .lf-btn:hover { background: var(--accent); border-color: var(--accent); color: var(--bg-deep); }
+    #lf-name {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+      min-width: 64px;
+      text-align: center;
+    }
+
+    /* Elapsed */
+    #elapsed-display {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      color: var(--text-dim);
+      font-size: 11px;
+      margin: 6px 0 14px;
+      padding: 8px 10px;
+      background: oklch(1 0 0 / 0.025);
+      border-radius: 7px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    #elapsed-display::before {
+      content: 'ELAPSED';
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      color: var(--text-mute);
+      font-weight: 600;
+    }
+
+    /* Buttons */
+    #buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 14px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 13px 10px;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      color: var(--bg-deep);
+      transition: transform 0.08s, filter 0.15s, box-shadow 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn:hover  { filter: brightness(1.08); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); filter: brightness(0.95); }
+
+    #launch-btn {
+      background: var(--go);
+      box-shadow: 0 0 0 1px var(--go), 0 6px 18px oklch(0.78 0.14 145 / 0.35);
+    }
+    #launch-btn::before {
+      content: '▶';
+      margin-right: 6px;
+      font-size: 10px;
+    }
+    #reset-btn  {
+      background: var(--panel-2);
+      color: var(--text);
+      box-shadow: inset 0 0 0 1px var(--line);
+    }
+    #reset-btn:hover { background: var(--stop); color: var(--bg-deep); box-shadow: inset 0 0 0 1px var(--stop); }
+
+    /* Canvas */
+    #sim { flex: 1; display: block; cursor: grab; }
+    #sim:active { cursor: grabbing; }
+
+    /* Speed pill (top-right of canvas) */
+    #speed-pill {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: oklch(0.22 0.02 270 / 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--line);
+      border-radius: 99px;
+      padding: 6px 14px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+    }
+    #speed-pill::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    /* HUD card (canvas overlay) */
+    #hud {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: oklch(0.22 0.02 270 / 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      width: 280px;
+      max-width: calc(100% - 32px);
+      box-shadow: var(--shadow-card);
+      pointer-events: none;
+      font-size: 12px;
+    }
+    #hud .hud-title {
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      font-weight: 600;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #hud .hud-title .badge {
+      padding: 2px 8px;
+      border-radius: 99px;
+      background: var(--accent);
+      color: var(--bg-deep);
+      letter-spacing: 0.04em;
+      font-size: 10px;
+    }
+    #hud .hud-title .badge.go   { background: var(--go); }
+    #hud .hud-title .badge.warn { background: var(--warn); }
+    #hud .hud-title .badge.bad  { background: var(--stop); }
+
+    .hud-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 4px 0;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    .hud-row .k {
+      color: var(--text-mute);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+    .hud-row .v { color: var(--text); font-weight: 500; }
+    .hud-row .v.go { color: var(--go); }
+    .hud-row .v.warn { color: var(--warn); }
+    .hud-row .v.bad { color: var(--stop); }
+    .hud-divider {
+      height: 1px;
+      background: var(--line-soft);
+      margin: 8px 0;
+    }
+    .hud-section-title {
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      font-weight: 600;
+      margin: 4px 0 4px;
+    }
+
+    .stage { position: relative; flex: 1; min-width: 0; }
+  </style>
+</head>
+<body>
+
+<!-- ── LEFT PANEL ── -->
+<div id="panel">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <div>
+      <div class="brand-name">Rocket Path</div>
+      <div class="brand-tag">Solar Sim</div>
+    </div>
+  </div>
+
+  <div class="sec-header">Planets</div>
+  <div id="planets-list"></div>
+
+  <div class="extras">
+    <label class="extra-row">
+      <input type="checkbox" id="cb-moons" checked>
+      <span class="extra-icon" data-icon="moon"></span>
+      <span class="extra-label">Moons <span class="extra-count">8</span></span>
+    </label>
+    <label class="extra-row">
+      <input type="checkbox" id="cb-asteroids" checked>
+      <span class="extra-icon" data-icon="belt"></span>
+      <span class="extra-label">Asteroid belt</span>
+    </label>
+  </div>
+
+  <div class="sec-header">Rocket</div>
+  <div id="launch-from">
+    <div>
+      <div class="lf-label">Launch from</div>
+      <div id="lf-name">Earth</div>
+    </div>
+    <div class="lf-controls">
+      <button class="lf-btn" id="lf-prev" type="button" aria-label="Previous planet">‹</button>
+      <button class="lf-btn" id="lf-next" type="button" aria-label="Next planet">›</button>
+    </div>
+  </div>
+
+  <div class="slider-group">
+    <div class="slider-label"><span>Thrust</span><span><span id="thrust-val">5.0</span> MN</span></div>
+    <input type="range" id="thrust-s" min="0.1" max="50" step="0.1" value="5">
+  </div>
+
+  <div class="slider-group">
+    <div class="slider-label"><span>Fuel</span><span><span id="fuel-val">180</span> s</span></div>
+    <input type="range" id="fuel-s" min="10" max="600" step="1" value="180">
+  </div>
+
+  <div class="slider-group" id="angle-group">
+    <div class="slider-label"><span>Angle</span><span><span id="angle-val">0</span>°</span></div>
+    <input type="range" id="angle-s" min="-180" max="180" step="1" value="0">
+  </div>
+
+  <div class="sec-header">Time</div>
+  <div class="slider-group">
+    <div class="slider-label"><span>Days / sec</span><span id="speed-val">1.0</span></div>
+    <input type="range" id="speed-s" min="0.1" max="365" step="0.1" value="1">
+  </div>
+  <div id="elapsed-display"><span id="elapsed-num">0.0 days</span></div>
+
+  <div id="buttons">
+    <button class="btn" id="launch-btn">LAUNCH</button>
+    <button class="btn" id="reset-btn">RESET</button>
+  </div>
+</div>
+
+<!-- ── SIMULATION CANVAS ── -->
+<div class="stage">
+  <canvas id="sim"></canvas>
+  <div id="hud"></div>
+  <div id="speed-pill"><span id="speed-pill-val">1.0</span> days/s</div>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════
+//  PLANET DATA  (NASA Planetary Fact Sheet)
+// ═══════════════════════════════════════════════════════════════
+
+const STAR_DATA = { name:'Sun', mass_kg:1.989e30, radius_m:6.957e8, color:'#FDB813' };
+
+// Moons: orbit their parent planet. Mass kept low so they don't perturb the
+// rocket much (still included as attractors). Radii visually exaggerated for
+// drawability — actual radii too small at system scale.
+const MOONS_RAW = [
+  { parent:'Earth',   name:'Moon',     mass_kg:7.342e22, radius_m:1.737e6,
+    orbital_radius_m:3.844e8,  orbital_period_s:2.36e6,  color:'#D8D8D8' },
+  { parent:'Mars',    name:'Phobos',   mass_kg:1.066e16, radius_m:1.11e4,
+    orbital_radius_m:9.376e6,  orbital_period_s:2.76e4,  color:'#A89A88' },
+  { parent:'Mars',    name:'Deimos',   mass_kg:1.476e15, radius_m:6.2e3,
+    orbital_radius_m:2.346e7,  orbital_period_s:1.09e5,  color:'#9C8E7E' },
+  { parent:'Jupiter', name:'Io',       mass_kg:8.93e22,  radius_m:1.821e6,
+    orbital_radius_m:4.22e8,   orbital_period_s:1.53e5,  color:'#E8C56B' },
+  { parent:'Jupiter', name:'Europa',   mass_kg:4.80e22,  radius_m:1.561e6,
+    orbital_radius_m:6.71e8,   orbital_period_s:3.07e5,  color:'#D9CFB8' },
+  { parent:'Jupiter', name:'Ganymede', mass_kg:1.482e23, radius_m:2.634e6,
+    orbital_radius_m:1.07e9,   orbital_period_s:6.18e5,  color:'#A89882' },
+  { parent:'Jupiter', name:'Callisto', mass_kg:1.076e23, radius_m:2.410e6,
+    orbital_radius_m:1.882e9,  orbital_period_s:1.44e6,  color:'#7E7164' },
+  { parent:'Saturn',  name:'Titan',    mass_kg:1.345e23, radius_m:2.575e6,
+    orbital_radius_m:1.222e9,  orbital_period_s:1.378e6, color:'#E0B36A' },
+];
+
+// Asteroid belt: between Mars and Jupiter, 2.2–3.2 AU
+const ASTEROID_BELT = {
+  innerRadius:  3.30e11,  // ~2.2 AU
+  outerRadius:  4.79e11,  // ~3.2 AU
+  count:        260,
+};
+
+const PLANETS_RAW = [
+  { name:'Mercury', mass_kg:3.285e23, radius_m:2.439e6,  orbital_radius_m:5.791e10,
+    orbital_period_s:7.600e6,  color:'#B5B5B5', surface_gravity_ms2:3.7,
+    escape_ms:4250,   lo_ms:3000,  helio_ms:47362, dv_solar_ms:19500 },
+  { name:'Venus',   mass_kg:4.867e24, radius_m:6.051e6,  orbital_radius_m:1.082e11,
+    orbital_period_s:1.941e7,  color:'#E8C56B', surface_gravity_ms2:8.87,
+    escape_ms:10360,  lo_ms:7330,  helio_ms:35020, dv_solar_ms:14500 },
+  { name:'Earth',   mass_kg:5.972e24, radius_m:6.371e6,  orbital_radius_m:1.496e11,
+    orbital_period_s:3.156e7,  color:'#4B9CD3', surface_gravity_ms2:9.81,
+    escape_ms:11186,  lo_ms:7912,  helio_ms:29780, dv_solar_ms:12342 },
+  { name:'Mars',    mass_kg:6.390e23, radius_m:3.389e6,  orbital_radius_m:2.279e11,
+    orbital_period_s:5.936e7,  color:'#C1440E', surface_gravity_ms2:3.72,
+    escape_ms:5030,   lo_ms:3550,  helio_ms:24080, dv_solar_ms:8650  },
+  { name:'Jupiter', mass_kg:1.898e27, radius_m:6.991e7,  orbital_radius_m:7.783e11,
+    orbital_period_s:3.743e8,  color:'#C88B3A', surface_gravity_ms2:24.79,
+    escape_ms:59500,  lo_ms:42100, helio_ms:13070, dv_solar_ms:5400  },
+  { name:'Saturn',  mass_kg:5.683e26, radius_m:5.823e7,  orbital_radius_m:1.432e12,
+    orbital_period_s:9.294e8,  color:'#E4D191', surface_gravity_ms2:10.44,
+    escape_ms:35500,  lo_ms:25100, helio_ms:9680,  dv_solar_ms:4000  },
+  { name:'Uranus',  mass_kg:8.681e25, radius_m:2.536e7,  orbital_radius_m:2.867e12,
+    orbital_period_s:2.651e9,  color:'#7DE8E8', surface_gravity_ms2:8.69,
+    escape_ms:21300,  lo_ms:15080, helio_ms:6800,  dv_solar_ms:2820  },
+  { name:'Neptune', mass_kg:1.024e26, radius_m:2.462e7,  orbital_radius_m:4.515e12,
+    orbital_period_s:5.200e9,  color:'#3F54BA', surface_gravity_ms2:11.15,
+    escape_ms:23500,  lo_ms:16630, helio_ms:5430,  dv_solar_ms:2250  },
+];
+
+// ═══════════════════════════════════════════════════════════════
+//  PHYSICS CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+
+const G                 = 6.674e-11;
+const EARTH_DAY_S       = 86400;
+const ROCKET_DT_TARGET  = 60;
+const ROCKET_DT_MIN     = 0.5;
+const ROCKET_MAX_SUB    = 4000;
+const PREVIEW_STEPS     = 600;
+const PREVIEW_DT        = 1800;
+const TRAIL_CAP         = 4000;
+const PLANET_VIEW_RADII = 35;
+const PREVIEW_EVERY     = 20;   // frames between preview recomputes
+
+// ═══════════════════════════════════════════════════════════════
+//  BODY CLASSES
+// ═══════════════════════════════════════════════════════════════
+
+class Star {
+  constructor(d) {
+    this.name = d.name; this.mass = d.mass_kg;
+    this.radius = d.radius_m; this.color = d.color;
+    this.position = [0, 0]; this.velocity = [0, 0];
+  }
+}
+
+class Planet {
+  constructor(d, mult = 1) {
+    this.name   = d.name;
+    this.mass   = d.mass_kg * mult;
+    this.radius = d.radius_m;
+    this.color  = d.color;
+    this.orbitalRadius = d.orbital_radius_m;
+    this.orbitalPeriod = d.orbital_period_s;
+    this.surfaceGravity = d.surface_gravity_ms2;
+    this.escapeRef  = d.escape_ms  || 0;
+    this.loRef      = d.lo_ms      || 0;
+    this.helioRef   = d.helio_ms   || 0;
+    this.dvSolarRef = d.dv_solar_ms|| 0;
+    this.angle = 0;
+    this.position = [this.orbitalRadius, 0];
+    const v = (2 * Math.PI * this.orbitalRadius) / this.orbitalPeriod;
+    this.velocity = [0, v];
+  }
+
+  updateOrbit(dt) {
+    const omega = (2 * Math.PI) / this.orbitalPeriod;
+    this.angle += omega * dt;
+    this.position = [
+      this.orbitalRadius * Math.cos(this.angle),
+      this.orbitalRadius * Math.sin(this.angle),
+    ];
+    const vt = (2 * Math.PI * this.orbitalRadius) / this.orbitalPeriod;
+    this.velocity = [-vt * Math.sin(this.angle), vt * Math.cos(this.angle)];
+  }
+
+  clone() {
+    const c = Object.create(Planet.prototype);
+    Object.assign(c, this);
+    c.position = [...this.position];
+    c.velocity = [...this.velocity];
+    return c;
+  }
+}
+
+class Moon {
+  constructor(d, parent) {
+    this.name   = d.name;
+    this.parent = parent;
+    this.mass   = d.mass_kg;
+    this.radius = d.radius_m;
+    this.color  = d.color;
+    this.orbitalRadius = d.orbital_radius_m;
+    this.orbitalPeriod = d.orbital_period_s;
+    this.angle = Math.random() * Math.PI * 2;
+    this.position = [parent.position[0] + this.orbitalRadius, parent.position[1]];
+    this.velocity = [0, 0];
+  }
+
+  updateOrbit(dt) {
+    const omega = (2 * Math.PI) / this.orbitalPeriod;
+    this.angle += omega * dt;
+    const vt = (2 * Math.PI * this.orbitalRadius) / this.orbitalPeriod;
+    this.position = [
+      this.parent.position[0] + this.orbitalRadius * Math.cos(this.angle),
+      this.parent.position[1] + this.orbitalRadius * Math.sin(this.angle),
+    ];
+    this.velocity = [
+      this.parent.velocity[0] - vt * Math.sin(this.angle),
+      this.parent.velocity[1] + vt * Math.cos(this.angle),
+    ];
+  }
+
+  clone() {
+    const c = Object.create(Moon.prototype);
+    Object.assign(c, this);
+    c.position = [...this.position];
+    c.velocity = [...this.velocity];
+    return c;
+  }
+}
+
+class Asteroid {
+  constructor(orbitalRadius, angle, color) {
+    this.orbitalRadius = orbitalRadius;
+    this.angle = angle;
+    this.color = color;
+    this.radius = 1.5e6 + Math.random() * 2e6; // visual only
+    // Period from Kepler's 3rd law (relative to Earth: T^2 ∝ a^3, T_E=1y)
+    const auR = orbitalRadius / 1.496e11;
+    this.orbitalPeriod = Math.sqrt(auR*auR*auR) * 3.156e7;
+    this.position = [orbitalRadius * Math.cos(angle), orbitalRadius * Math.sin(angle)];
+  }
+  updateOrbit(dt) {
+    const omega = (2 * Math.PI) / this.orbitalPeriod;
+    this.angle += omega * dt;
+    this.position[0] = this.orbitalRadius * Math.cos(this.angle);
+    this.position[1] = this.orbitalRadius * Math.sin(this.angle);
+  }
+}
+
+class Rocket {
+  constructor() {
+    this.name   = 'Rocket';
+    this.mass   = 1000;
+    this.radius = 10;
+    this.color  = '#FF4444';
+    this.thrust    = 5e6;
+    this.burnTime  = 180;
+    this.elapsedBurn   = 0;
+    this.launchAngle   = 0;
+    this.launched      = false;
+    this.trajectory    = [];
+    this.launchPlanetName   = '';
+    this.launchPlanetRadius = 0;
+    this.deltaVUsed  = 0;
+    this.peakSpeed   = 0;
+    this.maxAltitude = 0;
+    this.position = [0, 0];
+    this.velocity = [0, 0];
+  }
+
+  launch(planet, angleDeg = 0) {
+    this.launchAngle = angleDeg * Math.PI / 180;
+    const pa = Math.atan2(planet.position[1], planet.position[0]);
+    const so = planet.radius + this.radius + 1;
+    this.position = [
+      planet.position[0] + so * Math.cos(pa),
+      planet.position[1] + so * Math.sin(pa),
+    ];
+    this.velocity = [...planet.velocity];
+    this.launched  = true;
+    this.trajectory = [[...this.position]];
+    this.elapsedBurn = 0; this.deltaVUsed = 0;
+    this.peakSpeed = 0;   this.maxAltitude = 0;
+    this.launchPlanetName   = planet.name;
+    this.launchPlanetRadius = planet.radius;
+  }
+
+  hasFuel() { return this.launched && this.elapsedBurn < this.burnTime; }
+  speed()   { return Math.hypot(this.velocity[0], this.velocity[1]); }
+
+  recordPosition() { this.trajectory.push([...this.position]); }
+
+  updateTelemetry(pp) {
+    const s = this.speed();
+    if (s > this.peakSpeed) this.peakSpeed = s;
+    const alt = Math.hypot(this.position[0]-pp[0], this.position[1]-pp[1]) - this.launchPlanetRadius;
+    if (alt > this.maxAltitude) this.maxAltitude = alt;
+  }
+
+  clone() {
+    const c = Object.create(Rocket.prototype);
+    Object.assign(c, this);
+    c.position   = [...this.position];
+    c.velocity   = [...this.velocity];
+    c.trajectory = [];
+    return c;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PHYSICS FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+
+function totalAccel(rocket, attractors) {
+  let ax = 0, ay = 0;
+  for (const b of attractors) {
+    const dx = b.position[0] - rocket.position[0];
+    const dy = b.position[1] - rocket.position[1];
+    const r2 = dx*dx + dy*dy;
+    if (r2 === 0) continue;
+    const r = Math.sqrt(r2);
+    const a = G * b.mass / r2;
+    ax += a * dx / r;  ay += a * dy / r;
+  }
+  return [ax, ay];
+}
+
+function escVel(p)       { return Math.sqrt(2 * G * p.mass / p.radius); }
+function loVel(p)        { return Math.sqrt(G * p.mass / p.radius); }
+function solarOrbVel(p, star) {
+  const r = Math.hypot(p.position[0], p.position[1]);
+  return r ? Math.sqrt(G * star.mass / r) : 0;
+}
+function solarEscVel(p, star) {
+  const r = Math.hypot(p.position[0], p.position[1]);
+  return r ? Math.sqrt(2 * G * star.mass / r) : 0;
+}
+function dvCap(thrust, burnTime) { return (thrust / 1000) * burnTime; }
+
+function classify(thrust, burnTime, planet, star) {
+  const cap  = dvCap(thrust, burnTime);
+  const vOrb = loVel(planet);
+  const vEsc = escVel(planet);
+  const dv   = Math.max(0, solarEscVel(planet, star) - solarOrbVel(planet, star));
+  if (cap < vOrb * 0.6)  return 'sub-orbital';
+  if (cap < vOrb)        return 'low altitude';
+  if (cap < vEsc)        return 'orbit-capable';
+  if (cap < vEsc + dv)   return 'interplanetary';
+  return 'solar-escape';
+}
+
+function applyThrust(rocket, dt) {
+  if (!rocket.hasFuel()) return;
+  const burn = Math.min(dt, rocket.burnTime - rocket.elapsedBurn);
+  const acc  = rocket.thrust / rocket.mass;
+  const dir  = Math.atan2(rocket.position[1], rocket.position[0]) + rocket.launchAngle;
+  rocket.velocity[0] += acc * Math.cos(dir) * burn;
+  rocket.velocity[1] += acc * Math.sin(dir) * burn;
+  rocket.elapsedBurn += burn;
+  rocket.deltaVUsed  += acc * burn;
+}
+
+function pickSub(rocket, attractors, remaining) {
+  let aMax = 0, rNear = Infinity;
+  for (const b of attractors) {
+    const dx = b.position[0] - rocket.position[0];
+    const dy = b.position[1] - rocket.position[1];
+    const r2 = dx*dx + dy*dy;
+    if (!r2) continue;
+    const a = G * b.mass / r2;
+    if (a > aMax) { aMax = a; rNear = Math.sqrt(r2); }
+  }
+  if (!aMax) return Math.min(remaining, ROCKET_DT_TARGET);
+  const sub = Math.max(ROCKET_DT_MIN, Math.min(0.05 * Math.sqrt(rNear / aMax), ROCKET_DT_TARGET));
+  return Math.min(sub, remaining);
+}
+
+function stepEuler(dt, star, planets, rocket) {
+  if (!rocket || !rocket.launched) {
+    for (const p of planets) p.updateOrbit(dt);
+    for (const m of moons) m.updateOrbit(dt);
+    for (const a of asteroids) a.updateOrbit(dt);
+    return;
+  }
+  const att = [star, ...planets, ...moons];
+  let rem = dt, steps = 0;
+  const lp = planets.find(p => p.name === rocket.launchPlanetName) || null;
+
+  while (rem > 1e-9 && steps < ROCKET_MAX_SUB) {
+    const sub = pickSub(rocket, att, rem);
+    for (const p of planets) p.updateOrbit(sub);
+    for (const m of moons) m.updateOrbit(sub);
+    applyThrust(rocket, sub);
+    const [ax, ay] = totalAccel(rocket, att);
+    rocket.velocity[0] += ax * sub; rocket.velocity[1] += ay * sub;
+    rocket.position[0] += rocket.velocity[0] * sub;
+    rocket.position[1] += rocket.velocity[1] * sub;
+    rem -= sub; steps++;
+  }
+  if (rem > 1e-9) {
+    for (const p of planets) p.updateOrbit(rem);
+    for (const m of moons) m.updateOrbit(rem);
+  }
+  for (const a of asteroids) a.updateOrbit(dt); // visual only — fixed step ok
+  rocket.recordPosition();
+  if (lp) rocket.updateTelemetry(lp.position);
+}
+
+function predictTrajectory(rocketTpl, star, planets) {
+  const gr = rocketTpl.clone();
+  const gp = planets.map(p => p.clone());
+  // Re-bind cloned moons to cloned planets so parent positions update correctly
+  const gm = moons.map(m => {
+    const c = m.clone();
+    c.parent = gp.find(p => p.name === m.parent.name) || m.parent;
+    return c;
+  });
+  const att = [star, ...gp, ...gm];
+  const pts = [[...gr.position]];
+
+  for (let i = 0; i < PREVIEW_STEPS; i++) {
+    let rem = PREVIEW_DT, steps = 0;
+    while (rem > 1e-9 && steps < ROCKET_MAX_SUB) {
+      const sub = pickSub(gr, att, rem);
+      for (const p of gp) p.updateOrbit(sub);
+      for (const m of gm) m.updateOrbit(sub);
+      applyThrust(gr, sub);
+      const [ax, ay] = totalAccel(gr, att);
+      gr.velocity[0] += ax*sub; gr.velocity[1] += ay*sub;
+      gr.position[0] += gr.velocity[0]*sub;
+      gr.position[1] += gr.velocity[1]*sub;
+      rem -= sub; steps++;
+    }
+    if (rem > 1e-9) {
+      for (const p of gp) p.updateOrbit(rem);
+      for (const m of gm) m.updateOrbit(rem);
+    }
+    pts.push([...gr.position]);
+    if (Math.hypot(...gr.position) > 8e12) break;
+  }
+  return pts;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDERER
+// ═══════════════════════════════════════════════════════════════
+
+const PANEL_W = 280;
+
+class Renderer {
+  constructor(canvas) {
+    this.cv  = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.scale = 1;
+    this._cx = 0; this._cy = 0;
+    this._tx = 0; this._ty = 0;
+    this._stars = [];
+
+    // Palette — matches the OKLCH tokens in CSS
+    this.C = {
+      BG:      'oklch(0.18 0.02 270)',
+      TEXT:    'oklch(0.96 0.01 270)',
+      DIM:     'oklch(0.72 0.015 270)',
+      ORBIT:   'oklch(0.32 0.02 270 / 0.7)',
+      TRAIL:   'oklch(0.72 0.16 25)',          /* coral */
+      PREVIEW: 'oklch(0.78 0.14 235)',         /* sky blue */
+      OK:      'oklch(0.78 0.14 145)',         /* mint */
+      WARN:    'oklch(0.82 0.14 85)',          /* amber */
+      BAD:     'oklch(0.72 0.16 25)',          /* coral */
+    };
+
+    this.resize();
+    this._genStars();
+  }
+
+  _genStars() {
+    this._stars = [];
+    for (let i = 0; i < 220; i++) {
+      this._stars.push({
+        x: Math.random() * this.W,
+        y: Math.random() * this.H,
+        r: Math.random() * 1.2 + 0.3,
+        a: Math.random() * 0.6 + 0.2,
+      });
+    }
+  }
+
+  resize() {
+    // Sim canvas width matches stage; height is full viewport
+    this.W = this.cv.parentElement ? this.cv.parentElement.clientWidth : window.innerWidth - PANEL_W;
+    this.H = window.innerHeight;
+    this.cv.width  = this.W;
+    this.cv.height = this.H;
+    this._genStars();
+  }
+
+  // Sim → screen coordinate conversion (y-axis flip)
+  toPx([x, y]) {
+    return [
+      this.W / 2 + (x - this._cx) / this.scale,
+      this.H / 2 - (y - this._cy) / this.scale,
+    ];
+  }
+
+  fitToSystem(planets) {
+    if (!planets.length) return;
+    const maxR = Math.max(...planets.map(p => p.orbitalRadius));
+    this.scale = maxR / (Math.min(this.W, this.H) / 2 * 0.82);
+  }
+
+  fitToPlanet(planet) {
+    if (!planet) return;
+    this.scale = Math.max(1, (PLANET_VIEW_RADII * planet.radius) / (Math.min(this.W, this.H) / 2));
+  }
+
+  zoom(f) { this.scale = Math.max(5e3, Math.min(this.scale * f, 2e13)); }
+
+  setTarget(x, y) { this._tx = x; this._ty = y; }
+  snapCam(x, y)   { this._tx = x; this._ty = y; this._cx = x; this._cy = y; }
+  easeCam(a = 0.18) {
+    const dx = this._tx - this._cx;
+    const dy = this._ty - this._cy;
+    // Snap when remainder is sub-pixel at current zoom — prevents jitter when
+    // camera-easing is small relative to the scale factor.
+    const px = Math.hypot(dx, dy) / this.scale;
+    if (px < 0.5) { this._cx = this._tx; this._cy = this._ty; return; }
+    this._cx += dx * a;
+    this._cy += dy * a;
+  }
+
+  clear() {
+    const ctx = this.ctx;
+    ctx.fillStyle = this.C.BG;
+    ctx.fillRect(0, 0, this.W, this.H);
+    // Background stars
+    for (const s of this._stars) {
+      ctx.globalAlpha = s.a;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  drawOrbitRing(planet) {
+    const [cx, cy] = this.toPx([0, 0]);
+    const rPx = planet.orbitalRadius / this.scale;
+    if (rPx < 2 || rPx > 6000) return;
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, rPx, 0, Math.PI*2);
+    this.ctx.strokeStyle = this.C.ORBIT;
+    this.ctx.lineWidth = 1;
+    this.ctx.stroke();
+  }
+
+  drawMoonOrbit(moon) {
+    const [cx, cy] = this.toPx(moon.parent.position);
+    const rPx = moon.orbitalRadius / this.scale;
+    if (rPx < 6 || rPx > 6000) return;
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, rPx, 0, Math.PI*2);
+    this.ctx.strokeStyle = 'oklch(0.45 0.02 270 / 0.4)';
+    this.ctx.lineWidth = 0.8;
+    this.ctx.stroke();
+  }
+
+  drawMoon(moon) {
+    const [px, py] = this.toPx(moon.position);
+    if (px < -40 || px > this.W+40 || py < -40 || py > this.H+40) return;
+    const r = Math.max(1.5, moon.radius / this.scale);
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI*2);
+    ctx.fillStyle = moon.color;
+    ctx.fill();
+    // Label only when zoomed in enough to read
+    if (r >= 2.5) {
+      ctx.fillStyle = this.C.DIM;
+      ctx.font = '500 10px "Space Grotesk", system-ui, sans-serif';
+      ctx.fillText(moon.name, px + r + 5, py + 3);
+    }
+  }
+
+  drawAsteroidBelt(belt, asteroids) {
+    if (!asteroids.length) return;
+    const ctx = this.ctx;
+    const [cx, cy] = this.toPx([0, 0]);
+    const innerPx = belt.innerRadius / this.scale;
+    const outerPx = belt.outerRadius / this.scale;
+    // Soft band when far out
+    if (outerPx < 800 && outerPx > 4) {
+      const band = ctx.createRadialGradient(cx, cy, innerPx, cx, cy, outerPx);
+      band.addColorStop(0,    'oklch(0.55 0.04 70 / 0)');
+      band.addColorStop(0.5,  'oklch(0.55 0.04 70 / 0.06)');
+      band.addColorStop(1,    'oklch(0.55 0.04 70 / 0)');
+      ctx.beginPath();
+      ctx.arc(cx, cy, outerPx, 0, Math.PI*2);
+      ctx.arc(cx, cy, innerPx, 0, Math.PI*2, true);
+      ctx.fillStyle = band;
+      ctx.fill('evenodd');
+    }
+    // Individual specks
+    for (const a of asteroids) {
+      const [px, py] = this.toPx(a.position);
+      if (px < 0 || px > this.W || py < 0 || py > this.H) continue;
+      const r = Math.max(0.6, Math.min(2.2, a.radius / this.scale));
+      ctx.fillStyle = a.color;
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  drawBody(body, minR = 3) {
+    const [px, py] = this.toPx(body.position);
+    if (px < -80 || px > this.W+80 || py < -80 || py > this.H+80) return;
+    const r = Math.max(minR, body.radius / this.scale);
+    const ctx = this.ctx;
+
+    // Star glow
+    if (body.name === 'Sun') {
+      const grad = ctx.createRadialGradient(px, py, r*0.5, px, py, r*3.5);
+      grad.addColorStop(0, 'oklch(0.85 0.16 85 / 0.45)');
+      grad.addColorStop(1, 'oklch(0.85 0.16 85 / 0)');
+      ctx.beginPath();
+      ctx.arc(px, py, r*3.5, 0, Math.PI*2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    // Planet glow halo (drawn behind the body fill)
+    if (body.name !== 'Sun' && body.name !== 'Rocket') {
+      const halo = ctx.createRadialGradient(px, py, r*0.9, px, py, r*2.6);
+      halo.addColorStop(0, body.color + '66');
+      halo.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.beginPath();
+      ctx.arc(px, py, r*2.6, 0, Math.PI*2);
+      ctx.fillStyle = halo;
+      ctx.fill();
+    }
+
+    // Body fill
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI*2);
+    ctx.fillStyle = body.color;
+    ctx.fill();
+
+    // Label (not for the rocket)
+    if (body.name !== 'Rocket') {
+      ctx.fillStyle = this.C.TEXT;
+      ctx.font = '500 12px "Space Grotesk", system-ui, sans-serif';
+      ctx.fillText(body.name, px + r + 8, py + 4);
+    }
+  }
+
+  drawTrail(rocket) {
+    const pts = rocket.trajectory;
+    if (pts.length < 2) return;
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.strokeStyle = this.C.TRAIL;
+    ctx.lineWidth = 1.6;
+    ctx.shadowColor = this.C.TRAIL;
+    ctx.shadowBlur = 6;
+    let first = true;
+    for (const pos of pts) {
+      const [px, py] = this.toPx(pos);
+      first ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      first = false;
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  drawPreview(pts, every = 6) {
+    this.ctx.fillStyle = this.C.PREVIEW;
+    for (let i = 0; i < pts.length; i++) {
+      if (i % every !== 0) continue;
+      const [px, py] = this.toPx(pts[i]);
+      if (px < 0 || px > this.W || py < 0 || py > this.H) continue;
+      const fade = 1 - i / pts.length * 0.6;
+      this.ctx.globalAlpha = fade;
+      this.ctx.beginPath();
+      this.ctx.arc(px, py, 1.8, 0, Math.PI*2);
+      this.ctx.fill();
+    }
+    this.ctx.globalAlpha = 1;
+  }
+
+}
+
+/* DOM HUD — renders into #hud */
+const hudEl = document.getElementById('hud');
+
+function badgeFor(tclass) {
+  if (!tclass) return '';
+  const map = {
+    'sub-orbital':    'bad',
+    'low altitude':   'warn',
+    'orbit-capable':  'go',
+    'interplanetary': 'go',
+    'solar-escape':   'go',
+  };
+  return map[tclass] || '';
+}
+
+function row(k, v, cls = '') {
+  return `<div class="hud-row"><span class="k">${k}</span><span class="v ${cls}">${v}</span></div>`;
+}
+
+function renderConfigHud(planet, star, thrust, burnTime, tclass) {
+  const vEsc    = escVel(planet);
+  const vLo     = loVel(planet);
+  const vHelio  = solarOrbVel(planet, star);
+  const vSolEsc = solarEscVel(planet, star);
+  const dvSol   = Math.max(0, vSolEsc - vHelio);
+  const cap     = dvCap(thrust, burnTime);
+  const capCls  = cap >= vEsc ? 'go' : cap >= vLo ? 'warn' : 'bad';
+  const escRef  = planet.escapeRef  || vEsc;
+  const loRef   = planet.loRef      || vLo;
+  const dvRef   = planet.dvSolarRef || dvSol;
+
+  hudEl.innerHTML = `
+    <div class="hud-title">Pre-flight <span class="badge ${badgeFor(tclass)}">${tclass}</span></div>
+    ${row('Launch from', planet.name)}
+    ${row('Δv capacity', `${(cap/1000).toFixed(2)} km/s`, capCls)}
+    <div class="hud-divider"></div>
+    <div class="hud-section-title">${planet.name} reference (NASA)</div>
+    ${row('Low orbit',   `${(loRef/1000).toFixed(2)} km/s`)}
+    ${row('Escape',      `${(escRef/1000).toFixed(2)} km/s`)}
+    ${row('Δv → solar',  `${(dvRef/1000).toFixed(2)} km/s`)}
+  `;
+}
+
+function renderFlyingHud(rocket, planet, tclass) {
+  const sp   = rocket.speed();
+  const fuel = rocket.hasFuel() ? 'burning' : 'exhausted';
+  let alt = NaN;
+  if (planet) {
+    alt = Math.hypot(
+      rocket.position[0]-planet.position[0],
+      rocket.position[1]-planet.position[1]
+    ) - planet.radius;
+  }
+  const vEsc   = planet ? escVel(planet) : 0;
+  const escCls = (planet && sp >= vEsc) ? 'go' : 'warn';
+  const fuelCls = rocket.hasFuel() ? 'go' : '';
+
+  hudEl.innerHTML = `
+    <div class="hud-title">In flight <span class="badge ${badgeFor(tclass)}">${tclass || '—'}</span></div>
+    ${row('Speed',     `${(sp/1000).toFixed(2)} km/s`)}
+    ${row('Δv used',   `${(rocket.deltaVUsed/1000).toFixed(2)} km/s`)}
+    ${row('Altitude',  isNaN(alt) ? '—' : `${(alt/1000).toFixed(0)} km`)}
+    ${row('Peak alt',  `${(rocket.maxAltitude/1000).toFixed(0)} km`)}
+    ${row('Fuel',      fuel, fuelCls)}
+    ${planet ? row(`Escape (${planet.name})`, `${(vEsc/1000).toFixed(2)} km/s`, escCls) : ''}
+  `;
+}
+
+// Monospace-friendly right-aligned number formatting
+function fmt(n, w, d) {
+  const s = d === 0 ? Math.round(n).toString() : n.toFixed(d);
+  return s.padStart(w);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  UI SETUP
+// ═══════════════════════════════════════════════════════════════
+
+const canvas   = document.getElementById('sim');
+const renderer = new Renderer(canvas);
+
+// Dynamically create planet rows
+const cbElems = [], massSliders = [];
+const list = document.getElementById('planets-list');
+
+PLANETS_RAW.forEach((pd, i) => {
+  // Toggle row
+  const row = document.createElement('div');
+  row.className = 'planet-row';
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.checked = true; cb.id = `cb${i}`;
+  cbElems.push(cb);
+
+  const dot = document.createElement('div');
+  dot.className = 'planet-dot';
+  dot.style.background = pd.color;
+
+  const lbl = document.createElement('label');
+  lbl.htmlFor = `cb${i}`; lbl.className = 'planet-name';
+  lbl.textContent = pd.name;
+
+  row.append(cb, dot, lbl);
+  list.appendChild(row);
+
+  // Mass slider row (log scale: slider value = log10(multiplier))
+  const mr = document.createElement('div');
+  mr.className = 'mass-row'; mr.id = `mr${i}`;
+
+  const ml = document.createElement('div');
+  ml.className = 'slider-label';
+  ml.innerHTML = `<span>Mass ×</span><span id="mv${i}">1.00</span>`;
+
+  const ms = document.createElement('input');
+  ms.type='range'; ms.min=-2; ms.max=2; ms.step=0.01; ms.value=0; ms.id=`ms${i}`;
+  massSliders.push(ms);
+
+  mr.append(ml, ms);
+  list.appendChild(mr);
+});
+
+// ── Slider value display bindings ──────────────────────────────
+const thrustS = document.getElementById('thrust-s');
+const fuelS   = document.getElementById('fuel-s');
+const angleS  = document.getElementById('angle-s');
+const speedS  = document.getElementById('speed-s');
+
+function bindSlider(el, valId, fmt_, onChange) {
+  const upd = () => {
+    document.getElementById(valId).textContent = fmt_(el.value);
+    onChange?.();
+  };
+  el.addEventListener('input', upd);
+}
+
+bindSlider(thrustS, 'thrust-val', v => parseFloat(v).toFixed(1), () => { needsPreview=true; });
+bindSlider(fuelS,   'fuel-val',   v => v,                         () => { needsPreview=true; });
+bindSlider(angleS,  'angle-val',  v => v,                         () => { needsPreview=true; });
+bindSlider(speedS,  'speed-val',  v => parseFloat(v).toFixed(1),  null);
+
+massSliders.forEach((ms, i) => {
+  ms.addEventListener('input', () => {
+    const mult = Math.pow(10, parseFloat(ms.value));
+    document.getElementById(`mv${i}`).textContent = mult.toFixed(2);
+    rebuildSystem(); needsPreview = true;
+  });
+});
+
+cbElems.forEach((cb, i) => {
+  cb.addEventListener('change', () => {
+    document.getElementById(`mr${i}`).style.display = cb.checked ? '' : 'none';
+    rebuildSystem(); needsPreview = true;
+    const en = enabledIdxs();
+    if (!en.includes(launchIdx)) {
+      launchIdx = en[0] ?? 2;
+      updateLFDisplay();
+    }
+  });
+});
+
+// ── Launch-from selector ───────────────────────────────────────
+let launchIdx = 2; // default Earth
+
+function enabledIdxs() {
+  return cbElems.map((cb, i) => cb.checked ? i : -1).filter(i => i >= 0);
+}
+
+function updateLFDisplay() {
+  document.getElementById('lf-name').textContent = PLANETS_RAW[launchIdx]?.name ?? '—';
+}
+
+function cycleLaunch(dir) {
+  if (simState !== 'CONFIG') return;
+  const en = enabledIdxs();
+  if (!en.length) return;
+  const ci = en.indexOf(launchIdx);
+  const n = en.length;
+  launchIdx = en[((ci + dir) % n + n) % n];
+  updateLFDisplay();
+  needsPreview = true;
+  const lp = getLaunchPlanet();
+  if (lp) snapToPlanet(lp);
+}
+document.getElementById('cb-moons').addEventListener('change', e => {
+  showMoons = e.target.checked;
+  rebuildSystem();
+  needsPreview = true;
+});
+document.getElementById('cb-asteroids').addEventListener('change', e => {
+  showAsteroids = e.target.checked;
+  rebuildSystem();
+  needsPreview = true;
+});
+
+document.getElementById('lf-prev').addEventListener('click', () => cycleLaunch(-1));
+document.getElementById('lf-next').addEventListener('click', () => cycleLaunch(1));
+
+// ── Buttons ───────────────────────────────────────────────────
+document.getElementById('launch-btn').addEventListener('click', doLaunch);
+document.getElementById('reset-btn').addEventListener('click',  doReset);
+
+// ── Zoom (scroll wheel) ───────────────────────────────────────
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  renderer.zoom(e.deltaY < 0 ? 0.88 : 1.14);
+}, { passive: false });
+
+// ── Resize ────────────────────────────────────────────────────
+window.addEventListener('resize', () => renderer.resize());
+
+// ═══════════════════════════════════════════════════════════════
+//  SIMULATION STATE
+// ═══════════════════════════════════════════════════════════════
+
+let star     = new Star(STAR_DATA);
+let planets  = [];
+let moons    = [];
+let asteroids = [];
+let showMoons = true;
+let showAsteroids = true;
+let rocket   = null;
+let simState = 'CONFIG';   // 'CONFIG' | 'FLYING'
+let simDays  = 0;
+let previewPts   = [];
+let needsPreview = true;
+let previewFrame = 0;
+
+function massMultiplier(i) { return Math.pow(10, parseFloat(massSliders[i].value)); }
+
+function rebuildSystem() {
+  star    = new Star(STAR_DATA);
+  planets = enabledIdxs().map(i => new Planet(PLANETS_RAW[i], massMultiplier(i)));
+
+  // Moons attach to currently-enabled planets
+  moons = [];
+  if (showMoons) {
+    for (const md of MOONS_RAW) {
+      const parent = planets.find(p => p.name === md.parent);
+      if (parent) moons.push(new Moon(md, parent));
+    }
+    moons.forEach(m => m.updateOrbit(0));
+  }
+
+  // Asteroid belt — pre-generate randomized orbits once per rebuild
+  asteroids = [];
+  if (showAsteroids) {
+    const palette = ['#8a7a64', '#a89882', '#6e5f4d', '#b3a48a', '#7c6e5a'];
+    for (let i = 0; i < ASTEROID_BELT.count; i++) {
+      const t = Math.random();
+      // bias toward middle of belt (Gaussian-ish)
+      const tt = (t + Math.random()) / 2;
+      const r = ASTEROID_BELT.innerRadius + tt * (ASTEROID_BELT.outerRadius - ASTEROID_BELT.innerRadius);
+      const ang = Math.random() * Math.PI * 2;
+      asteroids.push(new Asteroid(r, ang, palette[(Math.random() * palette.length) | 0]));
+    }
+  }
+
+  needsPreview = true;
+}
+
+function getLaunchPlanet() {
+  const en = enabledIdxs();
+  if (!en.length) return null;
+  if (!en.includes(launchIdx)) launchIdx = en[0];
+  return planets[en.indexOf(launchIdx)] ?? null;
+}
+
+function snapToPlanet(p) {
+  if (!p) { renderer.snapCam(0, 0); return; }
+  renderer.fitToPlanet(p);
+  renderer.snapCam(p.position[0], p.position[1]);
+}
+
+function makePreviewRocket() {
+  const lp = getLaunchPlanet();
+  if (!lp) return null;
+  const r = new Rocket();
+  r.thrust   = parseFloat(thrustS.value) * 1e6;
+  r.burnTime = parseFloat(fuelS.value);
+  r.launch(lp, parseFloat(angleS.value));
+  return r;
+}
+
+function computePreview() {
+  const pr = makePreviewRocket();
+  previewPts   = pr ? predictTrajectory(pr, star, planets) : [];
+  needsPreview = false;
+}
+
+function doLaunch() {
+  if (simState !== 'CONFIG') return;
+  const lp = getLaunchPlanet();
+  if (!lp) return;
+  rocket = new Rocket();
+  rocket.thrust   = parseFloat(thrustS.value) * 1e6;
+  rocket.burnTime = parseFloat(fuelS.value);
+  rocket.launch(lp, parseFloat(angleS.value));
+  simState = 'FLYING';
+  document.getElementById('angle-group').style.display = 'none';
+  document.getElementById('launch-btn').style.display  = 'none';
+}
+
+function doReset() {
+  rocket   = null;
+  simDays  = 0;
+  simState = 'CONFIG';
+  rebuildSystem();
+  document.getElementById('angle-group').style.display = '';
+  document.getElementById('launch-btn').style.display  = '';
+  const lp = getLaunchPlanet();
+  if (lp) snapToPlanet(lp); else renderer.fitToSystem(planets);
+  computePreview();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════════════════════════
+
+let lastTS = null;
+
+function loop(ts) {
+  if (lastTS === null) lastTS = ts;
+  let dtReal = Math.min((ts - lastTS) / 1000, 0.05);
+  lastTS = ts;
+
+  const dps   = parseFloat(speedS.value);
+  const dtSim = dtReal * dps * EARTH_DAY_S;
+
+  // Physics step
+  stepEuler(dtSim, star, planets, simState === 'FLYING' ? rocket : null);
+  simDays += dtSim / EARTH_DAY_S;
+
+  // Trim trail
+  if (rocket && rocket.trajectory.length > TRAIL_CAP) {
+    rocket.trajectory = rocket.trajectory.filter((_, i) => i % 2 === 0);
+  }
+
+  // Camera target
+  if (simState === 'FLYING' && rocket) {
+    renderer.setTarget(rocket.position[0], rocket.position[1]);
+  } else {
+    const lp = getLaunchPlanet();
+    renderer.setTarget(lp ? lp.position[0] : 0, lp ? lp.position[1] : 0);
+  }
+
+  // Periodic preview recompute
+  if (simState === 'CONFIG') {
+    previewFrame++;
+    if (previewFrame >= PREVIEW_EVERY || needsPreview) {
+      previewFrame = 0;
+      computePreview();
+    }
+  }
+
+  // Update elapsed display + speed pill
+  document.getElementById('elapsed-num').textContent =
+    `${simDays.toFixed(1)} days`;
+  document.getElementById('speed-pill-val').textContent = dps.toFixed(1);
+
+  // ── DRAW ──────────────────────────────────────────────
+  renderer.easeCam();
+  renderer.clear();
+
+  for (const p of planets) renderer.drawOrbitRing(p);
+  if (showAsteroids) renderer.drawAsteroidBelt(ASTEROID_BELT, asteroids);
+  renderer.drawBody(star, 8);
+  for (const p of planets) renderer.drawBody(p, 3);
+  if (showMoons) {
+    for (const m of moons) renderer.drawMoonOrbit(m);
+    for (const m of moons) renderer.drawMoon(m);
+  }
+
+  if (simState === 'CONFIG' && previewPts.length) {
+    renderer.drawPreview(previewPts);
+  }
+
+  if (simState === 'FLYING' && rocket) {
+    renderer.drawTrail(rocket);
+    renderer.drawBody(rocket, 4);
+    const lp     = planets.find(p => p.name === rocket.launchPlanetName) || null;
+    const tclass = lp ? classify(rocket.thrust, rocket.burnTime, lp, star) : '';
+    renderFlyingHud(rocket, lp, tclass);
+  }
+
+  if (simState === 'CONFIG') {
+    const lp = getLaunchPlanet();
+    if (lp) {
+      const tclass = classify(
+        parseFloat(thrustS.value) * 1e6,
+        parseFloat(fuelS.value),
+        lp, star
+      );
+      renderConfigHud(lp, star, parseFloat(thrustS.value)*1e6, parseFloat(fuelS.value), tclass);
+    }
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+
+rebuildSystem();
+const initLP = getLaunchPlanet();
+if (initLP) snapToPlanet(initLP); else renderer.fitToSystem(planets);
+computePreview();
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>
